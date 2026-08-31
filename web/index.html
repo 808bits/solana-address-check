@@ -1,0 +1,350 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Solana address check</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fbfaf8;
+    --fg: #23201c;
+    --muted: #6b645c;
+    --line: #ddd7cf;
+    --panel: #fff;
+    --hover: #f4f1ec;
+    --signer: #1a6b3c;
+    --signer-bg: #e6f3ea;
+    --dead: #9a2c2c;
+    --dead-bg: #f7e9e7;
+    --warn: #8a5a12;
+    --warn-bg: #f8efdc;
+    --invalid: #5c5852;
+    --invalid-bg: #eeebe6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171614;
+      --fg: #e8e4de;
+      --muted: #9a938a;
+      --line: #35322e;
+      --panel: #1f1e1b;
+      --hover: #262421;
+      --signer: #5fc98c;
+      --signer-bg: #16301f;
+      --dead: #e8837e;
+      --dead-bg: #331d1c;
+      --warn: #d9a441;
+      --warn-bg: #322715;
+      --invalid: #9a938a;
+      --invalid-bg: #26241f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2rem 1.25rem 4rem;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 62rem; margin: 0 auto; }
+  h1 { font-size: 1.35rem; margin: 0 0 .35rem; letter-spacing: -0.01em; }
+  p.sub { margin: 0 0 1.5rem; color: var(--muted); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+  textarea {
+    width: 100%;
+    min-height: 8.5rem;
+    resize: vertical;
+    padding: .7rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--fg);
+    font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .controls { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: .7rem; }
+  button {
+    padding: .55rem 1.1rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--fg);
+    color: var(--bg);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.secondary { background: transparent; color: var(--fg); font-weight: 400; }
+  button:disabled { opacity: .5; cursor: default; }
+  .controls .note { color: var(--muted); font-size: .85rem; margin-left: auto; }
+
+  .summary { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.75rem 0 .9rem; }
+  .chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .45rem;
+    padding: .35rem .7rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: .85rem;
+  }
+  .chip b { font-size: 1rem; font-variant-numeric: tabular-nums; }
+  .k-signer  { background: var(--signer-bg);  color: var(--signer); }
+  .k-torsion, .k-offcurve { background: var(--dead-bg); color: var(--dead); }
+  .k-small   { background: var(--warn-bg);    color: var(--warn); }
+  .k-invalid { background: var(--invalid-bg); color: var(--invalid); }
+
+  ol { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  li { border-top: 1px solid var(--line); background: var(--panel); }
+  li:first-child { border-top: none; }
+  details summary {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .55rem .8rem;
+    cursor: pointer;
+    list-style: none;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary:hover { background: var(--hover); }
+  summary .idx { color: var(--muted); font-size: .8rem; min-width: 2.1rem; font-variant-numeric: tabular-nums; }
+  summary .addr {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  summary .tag {
+    flex: none;
+    padding: .15rem .55rem;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  summary .key { flex: none; color: var(--muted); font-size: .78rem; min-width: 5.5rem; text-align: right; }
+  summary .chev { flex: none; color: var(--muted); transition: transform .12s; }
+  details[open] summary .chev { transform: rotate(90deg); }
+  details pre {
+    margin: 0;
+    padding: .3rem 1rem 1.1rem 3.9rem;
+    overflow-x: auto;
+    font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre;
+    color: var(--fg);
+  }
+  .empty { color: var(--muted); padding: 1rem 0; }
+  footer { margin-top: 2.5rem; color: var(--muted); font-size: .85rem; }
+  footer p { margin: .5rem 0; }
+</style>
+
+<main>
+  <h1>Solana address check</h1>
+  <p class="sub">
+    Paste a list of addresses. Each is sorted into one of five categories by
+    curve arithmetic running in WebAssembly, compiled from Zig. Click any row
+    for the reasoning. Nothing is sent anywhere.
+  </p>
+
+  <textarea id="input" spellcheck="false" autocapitalize="off" autocomplete="off"
+            placeholder="one address per line, or separated by spaces or commas"
+            aria-label="Solana addresses"></textarea>
+
+  <div class="controls">
+    <button id="check" type="button" disabled>Check all</button>
+    <button id="sample" class="secondary" type="button">Load 49 examples</button>
+    <button id="clear" class="secondary" type="button">Clear</button>
+    <span class="note" id="status">loading the module…</span>
+  </div>
+
+  <div class="summary" id="summary" hidden></div>
+  <ol id="results"></ol>
+  <p class="empty" id="empty" hidden>Nothing to check yet.</p>
+
+  <footer>
+    <p>
+      A Solana address is the 32 byte public key itself, not a hash of it, so
+      whether a private key can exist is a question about where those bytes
+      land on edwards25519, answerable offline.
+    </p>
+    <p>
+      Only <b>in the prime-order subgroup</b> can have a key. Off-curve and
+      torsion addresses provably cannot: nothing times the base point ever
+      reaches them. Small-order addresses are worse than useless, because
+      anyone can forge a signature for one.
+    </p>
+  </footer>
+</main>
+
+<script type="module">
+  const $ = (id) => document.getElementById(id);
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  // Ordinals come from address.Kind in the Zig source. The order there is the
+  // order the checks run in.
+  const KINDS = [
+    { label: "not an address", cls: "k-invalid",  key: false },
+    { label: "off the curve",  cls: "k-offcurve", key: false },
+    { label: "small order",    cls: "k-small",    key: false },
+    { label: "torsion",        cls: "k-torsion",  key: false },
+    { label: "signer",         cls: "k-signer",   key: true  },
+  ];
+
+  const MAX_ADDRESSES = 500;
+
+  let wasm = null;
+
+  /**
+   * Split pasted text into addresses. Newlines are the expected separator,
+   * but commas, spaces and tabs are accepted too so that a CSV column or a
+   * space-separated list can be pasted without editing.
+   */
+  function parseAddresses(text) {
+    return text.split(/[\s,;]+/).filter((s) => s.length > 0);
+  }
+
+  /** Run one address through the module. Returns {kind, report}. */
+  function classify(address, wantReport) {
+    const bytes = encoder.encode(address);
+    if (bytes.length > wasm.addressCapacity()) {
+      return { kind: 0, report: "This is far longer than any Solana address." };
+    }
+
+    // memory.buffer is re-read on every call because it would be detached if
+    // the module ever grew its memory.
+    new Uint8Array(wasm.memory.buffer).set(bytes, wasm.addressBuffer());
+    const length = wasm.check(bytes.length);
+    const kind = wasm.lastKind();
+
+    if (!wantReport) return { kind, report: null };
+    const report = decoder.decode(
+      new Uint8Array(wasm.memory.buffer, wasm.reportBuffer(), length));
+    return { kind, report };
+  }
+
+  function render(addresses) {
+    const results = $("results");
+    results.replaceChildren();
+
+    const counts = new Array(KINDS.length).fill(0);
+
+    for (const [i, address] of addresses.entries()) {
+      // Only the kind is computed now. The explanation is produced on demand
+      // when a row is opened, which keeps a 500 address scan cheap and means
+      // no report text is held in memory for rows nobody looks at.
+      const { kind } = classify(address, false);
+      counts[kind] += 1;
+      results.append(row(i + 1, address, kind));
+    }
+
+    renderSummary(counts, addresses.length);
+    $("empty").hidden = addresses.length > 0;
+  }
+
+  function row(index, address, kind) {
+    const meta = KINDS[kind];
+
+    const li = document.createElement("li");
+    const details = document.createElement("details");
+
+    const summary = document.createElement("summary");
+    summary.innerHTML =
+      `<span class="chev">›</span>` +
+      `<span class="idx"></span>` +
+      `<span class="addr"></span>` +
+      `<span class="tag"></span>` +
+      `<span class="key"></span>`;
+    summary.querySelector(".idx").textContent = index;
+    summary.querySelector(".addr").textContent = address;
+
+    const tag = summary.querySelector(".tag");
+    tag.textContent = meta.label;
+    tag.classList.add(meta.cls);
+
+    summary.querySelector(".key").textContent = meta.key ? "key possible" : "no key";
+
+    const pre = document.createElement("pre");
+    details.append(summary, pre);
+
+    // Fill the explanation the first time the row is opened.
+    details.addEventListener("toggle", () => {
+      if (details.open && pre.textContent === "") {
+        pre.textContent = classify(address, true).report;
+      }
+    });
+
+    li.append(details);
+    return li;
+  }
+
+  function renderSummary(counts, total) {
+    const summary = $("summary");
+    summary.replaceChildren();
+    summary.hidden = total === 0;
+
+    for (const [kind, meta] of KINDS.entries()) {
+      if (counts[kind] === 0) continue;
+      const chip = document.createElement("span");
+      chip.className = `chip ${meta.cls}`;
+      chip.innerHTML = `<b></b><span></span>`;
+      chip.querySelector("b").textContent = counts[kind];
+      chip.querySelector("span").textContent = meta.label;
+      summary.append(chip);
+    }
+
+    const withKey = counts[4];
+    $("status").textContent =
+      `${total} checked, ${withKey} can have a private key`;
+  }
+
+  function run() {
+    const addresses = parseAddresses($("input").value);
+    if (addresses.length > MAX_ADDRESSES) {
+      $("status").textContent =
+        `${addresses.length} addresses is more than the ${MAX_ADDRESSES} limit`;
+      return;
+    }
+    render(addresses);
+  }
+
+  async function load() {
+    try {
+      const response = await fetch("solana-check.wasm");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      // The module imports nothing, so there is no import object to build.
+      const { instance } = await WebAssembly.instantiate(
+        await response.arrayBuffer(), {});
+      wasm = instance.exports;
+      $("check").disabled = false;
+      $("status").textContent = "ready";
+    } catch (err) {
+      $("status").textContent = `could not load solana-check.wasm: ${err.message}`;
+      $("empty").hidden = false;
+      $("empty").textContent =
+        "Build the module with `zig build wasm`, then serve this directory " +
+        "over HTTP, for example `python3 -m http.server`. Opening the page " +
+        "straight from disk will not work, because fetch refuses file:// URLs.";
+    }
+  }
+
+  const SAMPLES = "BRxXDLFJRedad8fDM4QsnRU2NGRke6VUtKMiorxG9nWL\nHBHdmnGLLa6X1mrKpVY1WSvSnAHz4YTwnFgKkWH84dhK\n5qYaFNfpYpxL4Lf5yX9Ezr3o2Zi6WLzrcLGvGJC1GvBu\n6E5zEKyjrawu5pugS1xHfxeZ1viPimYeK2DKgpZ85dzR\nGBSWKSDz4UzyLkherkohnSUVdeeLb7mMQHck2LvBxs5v\nFD81k766EmPHVfCYPdeaugioiH795xGbsVVgkofPfSKv\n3nQ6g7MQkAZgACFvwoA1xRTxCPBoYSMUTcP1x5WDDtxy\n7bFbfqKqSQbFEqh6wMyFDpy8uiD23sbhMUC3AYBVKCLp\nFhxzQPtbxvbQpR81Jh9mjjzLhpU7rm5gG8SUwJDLG7ih\nBsdTtseMCYWCcSBUoHpnHGkcD65N2CyLB3hHZzLEKM8G\nCpxGznwxbP3P181jK1E7ap61Avp22zidbpgTGF2sBQ51\nWVWtcMQ1PjfM9dLEpmjxVEPRZAHv8sVQKaHHhAmjF67\n8GfBwsy81WtBLabpRyHmkk3Gv5KZz2hYYXAyDw6aYTMy\nDJ7fdduNzBDgSukkyU4CcYi5qQAFc73RmcZt9hUtaPMR\nDmauhW2q6QypTaYoWFmkN5kyT6ZpveUAfzx5b9jPtbs4\n8BPiYRJQmf3DruoSQipz1hn5ma6ug1zyzrRGMP84Kk3T\nGvw2aLNQMS21fcU2UEUCgJZaXf1dBKeLTZCWiwP3rV6s\n2NgDf3yuCkePcZnZ7s6rLVAAUkxrw1QA9jtaww2ozLZX\nC87HjCKJnG6bPRRudHMKFrVPSPc4AGPhbBSG7cvygREV\nnot-a-valid-address\n11111111111111111111111111111111\n5QYaFNfpYpxL4Lf5yX9Ezr3o2Zi6WLzrcLGvGJC1GvBu\nC23cctg5ByHJ5xuSdsdDdJ8bqDtwyzkiqg14s4ZkEid7\n562LWo8kTBKefosHVdEcBwfbwaqvU2bBsz85a9sL34hc\n9LedczPHtaV2rXtCQPnsRyr5B6b73yx2cChoU545qm3i\n3sqaUct1wgLefXMECbcoNvuCa9ku21jMambTzh2tEefj\n2Lhi1K9Kz8yFstk77mWRRcb3Qdj5tU5S6ep4Y1XKoGky\nAmeoSDdNU6E2oKQbXBRcMwaPGcHoArZQZNCjhFxDjSzG\nD327pD3gLVG1rKqfQFQZLNJ5TBXFfbc57GBSsuZ64hRx\nTokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA\nDcqxPppnVmE12uNk9Vsr4VjDLQoXC8mkgGoB7muBGCoN\n2scyJ8nAhm59s23ECJuEE2AvB159MQTwEtbzbH2AsQm8\nH3h1otu6rnLwiuXCLu1DJ6x1LYQSM2gRmqnbuuiJyWU5\nDpPVVFU5Pijx3Xf3DDWy9GBWbRmUXDczz1ZiphaZMxdD\nE4WzTRzMsAatMdi6QDmPwikFjshp6RghCMWNQ6oSzAJ9\nHT2i1DCpjNWBnxMJt5Ch16sXkvZc28bid6hUetB3P5Su\n5VHeCVp8rHVMkNFzxpp9xurbUxP2vSPcWP1XYjNiTmpU\nB6Q6v1c4VPtdwM4eNDyb1k155eV2HfJ9tndgsZWERKnw\n3Eayk5w8kjLjJEgx9jwk6kELZfXjFrPfg3pcS9e8tM3f\nFK35vgUCABhKn1egMGmU8zCPsj8fZep3rRoUfGCkNrNk\nAubzLDBxmzxQXPcF1cq2wefyWiPrVXQR5PjF3nbUFLP\nDvypF9u2VYq7RgoquH8DyoqbysKQFPR6BRjd23GvMyCA\nFrP4bZWpMx2wgXeCKy7ed61yH6TjTARXd4yTjNgSaMTG\n8qfwWHvq6yHHptoPqv4RBV7zrEsmNCj6724WMDwJuekn\nv5owGvrMzn9N2S8JqyJV6ESXTPPp9iY8wt6EqJRQW95\n2SKLKDW95JiEC4xFaRJ6zm8R9d5yQ2WHqMmwQHgipVeK\nG1htx2JDsBqyEeDZgSSQXHATXYvV2a7Q2NrNBo4odLvM\n5ZotAVGhKpS9kftbpvVqxQMW9ijYTnR9N7fH9EXyPBq4\ntNjyTNJmXFCziTKG7q8Ny4Wvrknz2vno7gatD7MHdKK";
+
+  $("check").addEventListener("click", run);
+  $("sample").addEventListener("click", () => {
+    $("input").value = SAMPLES;
+    if (wasm) run();
+  });
+  $("clear").addEventListener("click", () => {
+    $("input").value = "";
+    $("results").replaceChildren();
+    $("summary").hidden = true;
+    $("empty").hidden = true;
+    $("status").textContent = "ready";
+  });
+
+  load();
+</script>

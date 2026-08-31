@@ -1,0 +1,3 @@
+.zig-cache/
+zig-out/
+web/solana-check.wasm
