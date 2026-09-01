@@ -139,6 +139,7 @@
   .empty { color: var(--muted); padding: 1rem 0; }
   footer { margin-top: 2.5rem; color: var(--muted); font-size: .85rem; }
   footer p { margin: .5rem 0; }
+  footer a { color: inherit; }
 </style>
 
 <main>
@@ -175,6 +176,10 @@
       torsion addresses provably cannot: nothing times the base point ever
       reaches them. Small-order addresses are worse than useless, because
       anyone can forge a signature for one.
+    </p>
+    <p>
+      Source, including the Zig implementation of the checks and this page, is
+      on <a href="https://github.com/808bits/solana-address-check">GitHub</a>.
     </p>
   </footer>
 </main>
